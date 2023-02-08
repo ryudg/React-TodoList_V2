@@ -158,7 +158,7 @@ function todoReducer(state, action) {
         todo.id === action.id ? { ...todo, done: !todo.dobe } : todo
       );
     case "REMOVE":
-      return state.fliter((todo) => todo.id !== action.id);
+      return state.filter((todo) => todo.id !== action.id);
     default:
       throw new Error(`Unhandled action type: ${action.type}`);
   }
@@ -367,7 +367,7 @@ function App() {
 - TodoHead 컴포넌트에서 useTodoState 를 사용
 
 ```javascript
-// components/TodoHeader.js
+// components/TodoHead.js
 
 import { useTodoState } from "../TodoContext";
 
@@ -395,3 +395,163 @@ function TodoHead() {
 >   - 3: {id: 4, text: '기능 구현하기', done: false}
 >   - length: 4
 >   - [[Prototype]]: Array(0)
+
+# 5. 기능구현
+
+- Context 와 연동을 하여 기능을 구현
+- Context 에 있는 state 를 받아와서 렌더링을 하고, 필요한 상황에는 특정 액션을 dispatch 하면 됨
+
+## 5.1 TodoHead
+
+```javascript
+// components/TodoHead.js
+
+function TodoHead() {
+  const todos = useTodoState();
+
+  // TodoHead 에서는 done 값이 false 인 항목들의 개수를 화면에 보여줌
+  const undoneTasks = todos.filter((todo) => !todo.done);
+
+  // 날짜불러오기
+  const today = new Date();
+  const dateString = today.toLocaleDateString("ko-KR", {
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+  });
+  const dayName = today.toLocaleDateString("ko-KR", { weekday: "long" });
+
+  return (
+    <TodoHeadBlock>
+      <h1>{dateString}</h1>
+      <div className="day">{dayName}</div>
+      <div className="tasks-left">할 일 {undoneTasks.length}개 남음</div>
+    </TodoHeadBlock>
+  );
+}
+```
+
+## 5.2 TodoList
+
+- TodoList 에서는 `state` 를 조회하고 이를 렌더링해줘야함.
+- 그리고, onToggle, onRemove 와 같이 항목에 변화를 주는 작업은 `TodoItem `에서 함.
+
+```javascript
+//components/TodoList.js
+
+import { useTodoState } from "../TodoContext";
+
+...
+
+function TodoList() {
+  const todos = useTodoState();
+
+  return (
+    <TodoListBlock>
+      {todos.map((todo) => (
+        <TodoItem
+          key={todo.id}
+          id={todo.id}
+          text={todo.text}
+          done={todo.done}
+        />
+      ))}
+    </TodoListBlock>
+  );
+}
+```
+
+## 5.3 TodoItem
+
+- dispatch 를 사용해서 토글 기능과 삭제 기능을 구현
+
+```javascript
+// components/TodoItem.js
+import { useTodoDispatch } from "../TodoContext";
+
+...
+
+function TodoItem({ id, done, text }) {
+  const dispatch = useTodoDispatch();
+  const onToggle = () => dispatch({ type: "TOGGLE", id });
+  const onRemove = () => dispatch({ type: "REMOVE", id });
+
+  return (
+    <TodoItemBlock>
+      <CheckCircle done={done} onClick={onToggle}>
+        {done && <MdDone />}
+      </CheckCircle>
+      <Text done={done}>{text}</Text>
+      <Remove onClick={onRemove}>
+        <MdDelete />
+      </Remove>
+    </TodoItemBlock>
+  );
+}
+
+export default React.memo(TodoItem);
+```
+
+- `export default React.memo(TodoItem);`
+  - 다른 항목이 업데이트 될 때, 불필요한 리렌더링을 방지하게 되어 성능을 최적화
+
+## 5.4 TodoCreate
+
+- 자체적으로 관리해야 할 input 상태
+
+```javascript
+// components/TodoCreate.js
+
+import { useTodoDispatch, useTodoNextId } from '../TodoContext';
+
+...
+
+function TodoCreate() {
+  const [open, setOpen] = useState(false);
+  const [value, setValue] = useState("");
+
+  const dispatch = useTodoDispatch();
+  const nextId = useTodoNextId();
+
+  const onToggle = () => setOpen(!open);
+  const onChange = (e) => setValue(e.target.value);
+  const onSubmit = (e) => {
+    e.preventDefault();       // 새로고침 방지
+    dispatch({                // 새로운 항목을 추가하는 액션을 dispatc
+      type: "CREATE",
+      todo: {
+        id: nextId.current,
+        text: value,
+        done: false,
+      },
+    });
+    setValue("");             // value 초기화 및 open 값을 false 로 전환
+    setOpen(false);
+    nextId.current += 1;
+  };
+
+  return (
+    <>
+      {open && (
+        <InsertFormPositioner>
+          <InsertForm onSubmit={onSubmit}>
+            <Input
+              autoFocus
+              placeholder="할 일을 입력 후, Enter 를 누르세요"
+              onChange={onChange}
+              value={value}
+            />
+          </InsertForm>
+        </InsertFormPositioner>
+      )}
+      <CircleButton onClick={onToggle} open={open}>
+        <MdAdd />
+      </CircleButton>
+    </>
+  );
+}
+
+export default React.memo(TodoCreate);
+// TodoContext 에서 관리하고 있는 state 가 바뀔 때 때
+// TodoCreate 의 불필요한 리렌더링을 방지
+```
