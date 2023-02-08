@@ -217,3 +217,181 @@ export function TodoProvider({ children }) {
 ## 4.3 Custom Hook 만들기
 
 - 컴포넌트에서 `useContext` 를 직접 사용하는 대신에, `useContext` 를 사용하는 커스텀 Hook 을 만들어서 내보내기
+
+```javascript
+// TodoContext.js
+import React, { useReducer, createContext, useContext } from "react";
+
+...
+
+export function TodoProvider({ children }) {
+  ...
+}
+
+export function useTodoState() {
+  return useContext(TodoStateContext);
+}
+
+export function useTodoDispatch() {
+  return useContext(TodoDispatchContext);
+}
+```
+
+- 이렇게 해주면 후에 아래와 같이 사용할 수 있다.
+
+```javascript
+import React from "react";
+import { useTodoState, useTodoDispatch } from "../TodoContext";
+
+function Sample() {
+  const state = useTodoState();
+  const dispatch = useTodoDispatch();
+  return <div>Sample</div>;
+}
+```
+
+## 4.4 nextId 값 관리하기
+
+- `state` 를 위한 Context 와 `dispatch` 를 위한 Context 를 만들었는데,
+- 여기서 추가적으로 `nextId` 값을 위한 Context 를 만들어주기.
+  - `nextId` 값을 위한 Context 를 만들 때에도 마찬가지로 `useTodoNextId` 라는 커스텀 Hook을 만듬
+
+```javascript
+// TodoContext.js
+import React, { useReducer, createContext, useContext, useRef } from 'react';
+
+...
+
+const TodoStateContext = createContext();
+const TodoDispatchContext = createContext();
+const TodoNextIdContext = createContext();
+
+export function TodoProvider({ children }) {
+  const [state, dispatch] = useReducer(todoReducer, initialTodos);
+  const nextId = useRef(5);
+
+  return (
+    <TodoStateContext.Provider value={state}>
+      <TodoDispatchContext.Provider value={dispatch}>
+        <TodoNextIdContext.Provider value={nextId}>
+          {children}
+        </TodoNextIdContext.Provider>
+      </TodoDispatchContext.Provider>
+    </TodoStateContext.Provider>
+  );
+}
+
+export function useTodoState() {
+  return useContext(TodoStateContext);
+}
+
+export function useTodoDispatch() {
+  return useContext(TodoDispatchContext);
+}
+export function useTodoNextId() {
+  return useContext(TodoNextIdContext);
+}
+
+```
+
+## 4.5 Custom Hook 에서 에러 처리
+
+- `useTodoState`, `useTodoDispatch`, `useTodoNextId` Hook 을 사용하려면, 해당 컴포넌트가 TodoProvider 컴포넌트 내부에 렌더링되어 있어야 함.
+  - ex) App 컴포넌트에서 모든 내용을 TodoProvider 로 감싸기
+- 만약 TodoProvider 로 감싸져있지 않다면 에러를 발생시키도록 커스텀 Hook 을 수정
+
+<br>
+
+- Context 사용을 위한 커스텀 Hook 을 만들 때 이렇게 에러 처리를 해준다면, 후에 실수를 하게 됐을 때 문제점을 빨리 발견 할 수 있다.
+
+```javascript
+// TodoContext.js
+
+...
+
+export function TodoProvider({ children }) {
+  ...
+}
+
+export function useTodoState() {
+  const context = useContext(TodoStateContext);
+  if (!context) {
+    throw new Error('Cannot find TodoProvider');
+  }
+  return context;
+}
+
+export function useTodoDispatch() {
+  const context = useContext(TodoDispatchContext);
+  if (!context) {
+    throw new Error('Cannot find TodoProvider');
+  }
+  return context;
+}
+
+export function useTodoNextId() {
+  const context = useContext(TodoNextIdContext);
+  if (!context) {
+    throw new Error('Cannot find TodoProvider');
+  }
+  return context;
+}
+```
+
+## 4.6 컴포넌트 TodoProvider 로 감싸기
+
+- 프로젝트 모든 곳에서 Todo 관련 Context 들을 사용 할 수 있도록, App 컴포넌트에서 TodoProvider 를 불러와서 모든 내용을 TodoProvider 로 감싸기
+
+```javascript
+// App.js
+import { TodoProvider } from "./TodoContext";
+
+...
+
+function App() {
+  return (
+    <>
+      <TodoProvider>
+        <GlobalStyle />
+        <TodoTemplate>
+          <TodoHead />
+          <TodoList />
+          <TodoCreate />
+        </TodoTemplate>
+      </TodoProvider>
+    </>
+  );
+}
+```
+
+- TodoHead 컴포넌트에서 useTodoState 를 사용
+
+```javascript
+// components/TodoHeader.js
+
+import { useTodoState } from "../TodoContext";
+
+...
+
+function TodoHead() {
+  const todos = useTodoState();
+  console.log(todos);
+  return (
+    <TodoHeadBlock>
+      <h1>2023년 01월 01일</h1>
+      <div className="day">월요일</div>
+      <div className="tasks-left">할일 0개 남음</div>
+    </TodoHeadBlock>
+  );
+}
+```
+
+> **console.log(todos)** 의 결과
+>
+> - Array(4)
+>   - 0: {id: 1, text: '프로젝트 생성하기', done: true}
+>   - 1: {id: 2, text: '컴포넌트 스타일링하기', done: true}
+>   - 2: {id: 3, text: 'Context 만들기', done: false}
+>   - 3: {id: 4, text: '기능 구현하기', done: false}
+>   - length: 4
+>   - [[Prototype]]: Array(0)
